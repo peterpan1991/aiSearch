@@ -45,15 +45,15 @@ class SearchService:
             return
 
         self.initialize_ocr()
-        self.initialize_semantic()
+        # self.initialize_semantic()
 
         self.ocr_service.process_images(image_files, progress_callback)
 
-        def semantic_progress(current, total, filename):
-            if progress_callback:
-                progress_callback(current + total, total * 2, f"生成语义向量: {filename}")
+        # def semantic_progress(current, total, filename):
+        #     if progress_callback:
+        #         progress_callback(current + total, total * 2, f"生成语义向量: {filename}")
 
-        self.semantic_service.create_image_embeddings(image_files)
+        # self.semantic_service.create_image_embeddings(image_files)
 
     def search(self, query: str, mode: SearchMode = SearchMode.OCR, top_k: int = 50) -> List[FileItem]:
         """

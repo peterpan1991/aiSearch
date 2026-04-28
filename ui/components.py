@@ -16,7 +16,7 @@ class SearchModeSelector(ft.Container):
 
         self.ocr_button = ft.Button(
             content=ft.Row([
-                ft.Icon(ft.Icons.abc, size=16),
+                ft.Icon(ft.Icons.ABC, size=16),
                 ft.Text("文字搜索", size=12),
             ], spacing=5),
             on_click=lambda e: self._select_mode("ocr"),
@@ -29,7 +29,7 @@ class SearchModeSelector(ft.Container):
 
         self.semantic_button = ft.Button(
             content=ft.Row([
-                ft.Icon(ft.Icons.psychology, size=16),
+                ft.Icon(ft.Icons.PSYCHOLOGY_ALT, size=16),
                 ft.Text("语义搜索", size=12),
             ], spacing=5),
             on_click=lambda e: self._select_mode("semantic"),

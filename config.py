@@ -27,6 +27,11 @@ OCR_MODEL_DIR = os.path.join(CACHE_DIR, 'ocr_models')
 # 索引数据库目录
 INDEX_DIR = os.path.join(CACHE_DIR, 'index')
 
+# 语义搜索模型配置
+SEMANTIC_MODEL_NAME = 'clip-ViT-B-32'
+SEMANTIC_BATCH_SIZE = 32
+SEMANTIC_TOP_K = 50
+
 # 日志配置
 LOG_LEVEL = 'INFO'
 LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'

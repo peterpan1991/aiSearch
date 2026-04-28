@@ -4,9 +4,9 @@ UI主视图模块
 import flet as ft
 import threading
 from pathlib import Path
-from ui.components import SearchBar, FolderSelector, ResultGrid, StatusBar
+from ui.components import SearchBar, SearchModeSelector, FolderSelector, ResultGrid, StatusBar
 from services.file_service import FileService
-from services.ocr_service import OCRService
+from services.search_service import SearchService, SearchMode
 from ui.constants import COLORS
 
 @ft.control
@@ -16,10 +16,11 @@ class MainView(ft.Container):
     def init(self):
         self.expand = True
         self.file_service = FileService()
-        self.ocr_service = OCRService()
+        self.search_service = SearchService()
 
         # 初始化UI组件
         self.folder_selector = FolderSelector(on_folder_selected=self.on_folder_selected)
+        self.search_mode = SearchModeSelector(on_mode_change=self.on_search_mode_change)
         self.search_bar = SearchBar(on_search=self.on_search)
         self.result_grid = ResultGrid(on_item_click=self.on_item_click)
         self.status_bar = StatusBar()
@@ -28,10 +29,11 @@ class MainView(ft.Container):
         self.content = ft.Column([
             self.create_card(ft.Column([
                 self.folder_selector,
+                self.search_mode,
                 self.search_bar,
-                self.status_bar,
             ], spacing=10), expand=False),
             self.create_card(self.result_grid),
+            self.status_bar,
         ])
     
     def create_card(self, contents, expand=True):
@@ -56,45 +58,54 @@ class MainView(ft.Container):
 
         if not image_files:
             self.status_bar.set_status("没有找到图片文件")
+            self.search_bar.set_enabled(True)
             self.update()
             return
 
-        self.status_bar.set_status(f"找到 {len(image_files)} 张图片，开始OCR识别...")
-        self.search_bar.set_enabled(False)  # 禁用搜索按钮
+        self.status_bar.set_status(f"找到 {len(image_files)} 张图片，开始OCR和语义向量处理...")
+        self.search_bar.set_enabled(False)
         self.update()
 
-        # 在后台线程执行OCR识别，避免阻塞UI
-        def ocr_worker():
-            self.ocr_service.process_images(image_files, self.on_ocr_progress)
+        # 在后台线程执行处理，避免阻塞UI
+        def process_worker():
+            self.search_service.process_images(image_files, self.on_process_progress)
 
-            # OCR完成后在主线程更新UI
+            # 处理完成后在主线程更新UI
             def on_complete():
-                self.status_bar.set_status(f"OCR识别完成，共处理 {len(image_files)} 张图片")
+                self.status_bar.set_status(f"处理完成，共 {len(image_files)} 张图片")
                 self.result_grid.set_results(image_files)
-                self.search_bar.set_enabled(True)  # 启用搜索按钮
+                self.search_bar.set_enabled(True)
                 self.update()
 
             self.page.run_thread(on_complete)
 
-        thread = threading.Thread(target=ocr_worker, daemon=True)
+        thread = threading.Thread(target=process_worker, daemon=True)
         thread.start()
 
-    def on_ocr_progress(self, current: int, total: int, file_name: str):
-        """OCR进度回调"""
-        # 从后台线程更新UI需要使用 thread_safe_callback
+    def on_process_progress(self, current: int, total: int, filename: str):
+        """处理进度回调"""
         def update_progress():
-            self.status_bar.set_status(f"正在识别: {current}/{total} - {file_name}")
+            self.status_bar.set_status(f"正在处理: {current}/{total} - {filename}")
             self.update()
 
         self.page.run_thread(update_progress)
 
-    def on_search(self, keyword: str):
-        """搜索处理"""
-        self.status_bar.set_status(f"搜索: {keyword}")
+    def on_search_mode_change(self, mode: str):
+        """搜索模式切换"""
+        self.current_search_mode = mode
+        self.status_bar.set_status(f"切换到{mode}搜索模式")
         self.update()
 
-        # 执行搜索
-        results = self.ocr_service.search(keyword)
+    def on_search(self, keyword: str):
+        """搜索处理"""
+        mode = self.search_mode.get_mode()
+        mode_name = "文字" if mode == "ocr" else "语义"
+        self.status_bar.set_status(f"{mode_name}搜索: {keyword}")
+        self.update()
+
+        # 根据模式选择搜索方法
+        search_mode = SearchMode.OCR if mode == "ocr" else SearchMode.SEMANTIC
+        results = self.search_service.search(keyword, mode=search_mode)
 
         self.status_bar.set_status(f"找到 {len(results)} 个结果")
         self.result_grid.set_results(results)
