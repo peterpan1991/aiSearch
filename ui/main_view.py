@@ -62,7 +62,9 @@ class MainView(ft.Container):
             self.update()
             return
 
-        self.status_bar.set_status(f"找到 {len(image_files)} 张图片，开始OCR和语义向量处理...")
+        # 根据模式显示不同的状态信息
+        mode_name = "文字" if self.search_mode.get_mode() == "ocr" else "语义"
+        self.status_bar.set_status(f"找到 {len(image_files)} 张图片，开始{mode_name}处理...")
         self.search_bar.set_enabled(False)
         self.update()
 
@@ -72,7 +74,7 @@ class MainView(ft.Container):
 
             # 处理完成后在主线程更新UI
             def on_complete():
-                self.status_bar.set_status(f"处理完成，共 {len(image_files)} 张图片")
+                self.status_bar.set_status(f"{mode_name}处理完成，共 {len(image_files)} 张图片")
                 self.result_grid.set_results(image_files)
                 self.search_bar.set_enabled(True)
                 self.update()
@@ -93,7 +95,14 @@ class MainView(ft.Container):
     def on_search_mode_change(self, mode: str):
         """搜索模式切换"""
         self.current_search_mode = mode
-        self.status_bar.set_status(f"切换到{mode}搜索模式")
+        mode_name = "文字" if mode == "ocr" else "语义"
+        self.status_bar.set_status(f"切换到{mode_name}搜索模式")
+
+        # 设置搜索服务的模式
+        from services.search_service import SearchMode as SM
+        search_mode = SM.OCR if mode == "ocr" else SM.SEMANTIC
+        self.search_service.set_mode(search_mode)
+
         self.update()
 
     def on_search(self, keyword: str):

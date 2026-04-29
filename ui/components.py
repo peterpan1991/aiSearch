@@ -214,8 +214,14 @@ class ResultGrid(ft.Container):
                         src=file_item.path,
                         fit=ft.BoxFit.COVER,
                     ),
+                    height=170,
                     border_radius=5,
                     clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+                ),                
+                ft.Text(
+                    f"相似度: {file_item.similarity:.2%}" if file_item.similarity else "",
+                    size=9,
+                    color=ft.Colors.GREY_600,
                 ),
                 ft.Text(
                     Path(file_item.path).name,
@@ -226,7 +232,7 @@ class ResultGrid(ft.Container):
                 ),
             ], spacing=2),
             width=180,
-            height=200,
+            height=220,
             border_radius=8,
             bgcolor=COLORS['bg_primary'],
             padding=5,

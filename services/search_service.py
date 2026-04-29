@@ -21,6 +21,10 @@ class SearchService:
         self.semantic_service = None
         self.current_mode = SearchMode.OCR
 
+    def set_mode(self, mode: SearchMode):
+        """设置搜索模式"""
+        self.current_mode = mode
+
     def initialize_ocr(self):
         """初始化OCR服务"""
         if self.ocr_service is None:
@@ -35,7 +39,7 @@ class SearchService:
 
     def process_images(self, image_files: List[FileItem], progress_callback=None):
         """
-        处理图片 - 同时生成OCR文本和语义向量
+        处理图片 - 根据当前模式生成OCR文本或语义向量
 
         Args:
             image_files: 图片文件列表
@@ -44,16 +48,25 @@ class SearchService:
         if not image_files:
             return
 
-        self.initialize_ocr()
-        # self.initialize_semantic()
+        if self.current_mode == SearchMode.OCR:
+            self._process_ocr(image_files, progress_callback)
+        elif self.current_mode == SearchMode.SEMANTIC:
+            self._process_semantic(image_files, progress_callback)
 
+    def _process_ocr(self, image_files: List[FileItem], progress_callback):
+        """处理OCR"""
+        self.initialize_ocr()
         self.ocr_service.process_images(image_files, progress_callback)
 
-        # def semantic_progress(current, total, filename):
-        #     if progress_callback:
-        #         progress_callback(current + total, total * 2, f"生成语义向量: {filename}")
+    def _process_semantic(self, image_files: List[FileItem], progress_callback):
+        """处理语义向量"""
+        self.initialize_semantic()
 
-        # self.semantic_service.create_image_embeddings(image_files)
+        def semantic_progress_wrapper(current, total, filename):
+            if progress_callback:
+                progress_callback(current + total, total * 2, f"生成语义向量: {filename}")
+
+        self.semantic_service.create_image_embeddings(image_files)
 
     def search(self, query: str, mode: SearchMode = SearchMode.OCR, top_k: int = 50) -> List[FileItem]:
         """
@@ -67,8 +80,8 @@ class SearchService:
         Returns:
             匹配的文件列表
         """
-        if not query:
-            return []
+        # if not query:
+        #     return []
 
         if mode == SearchMode.OCR:
             return self._ocr_search(query)
@@ -85,9 +98,14 @@ class SearchService:
 
     def _semantic_search(self, query: str, top_k: int) -> List[FileItem]:
         """语义搜索 - 向量相似度"""
+        print(f"开始语义搜索: {query}")
         self.initialize_semantic()
         results = self.semantic_service.search_by_text(query, top_k)
-        return [item for item, _ in results]
+        items = []
+        for item, similarity in results:
+            item.similarity = similarity
+            items.append(item)
+        return items
 
     def clear_cache(self):
         """清空缓存"""

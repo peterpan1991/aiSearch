@@ -20,7 +20,7 @@ class SemanticSearchService:
 
     def __init__(self):
         self.embedding_dim = 512
-        self.index: Optional[faiss.IndexFlatL2] = None
+        self.index: Optional[faiss.IndexFlatIP] = None
         self.image_files: List = []
         self.embeddings: Optional[np.ndarray] = None
         self._initialized = False
@@ -32,8 +32,20 @@ class SemanticSearchService:
             return
 
         if not self._initialized:
-            self.index = faiss.IndexFlatL2(self.embedding_dim)
+            self.index = faiss.IndexFlatIP(self.embedding_dim)
             self._initialized = True
+
+    def _normalize_embeddings(self, embeddings: np.ndarray) -> np.ndarray:
+        """归一化向量用于余弦相似度"""
+        if embeddings.ndim == 1:
+            norm = np.linalg.norm(embeddings)
+            if norm == 0:
+                return embeddings.reshape(1, -1) if embeddings.shape[0] > 0 else embeddings
+            return (embeddings / norm).reshape(1, -1)
+        else:
+            norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+            norms = np.where(norms == 0, 1, norms)
+            return embeddings / norms
 
     def create_image_embeddings(self, image_files: List) -> bool:
         """
@@ -50,38 +62,44 @@ class SemanticSearchService:
 
         try:
             from sentence_transformers import SentenceTransformer
+            from PIL import Image
             import torch
 
             self.initialize()
 
             print(f"开始为 {len(image_files)} 张图片生成语义向量...")
 
-            model = SentenceTransformer('clip-ViT-B-32')
+            model = SentenceTransformer(config.SEMANTIC_MODEL_PATH, local_files_only=True)
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
             model.to(device)
 
             image_paths = [f.path for f in image_files]
-            embeddings = model.encode(image_paths, batch_size=32, convert_to_numpy=True, show_progress_bar=True)
 
-            self.embeddings = embeddings.astype('float32')
+            images = [Image.open(path).convert('RGB') for path in image_paths]
+            embeddings = model.encode(images, batch_size=32, convert_to_numpy=True, show_progress_bar=True)
+
+            self.embeddings = self._normalize_embeddings(embeddings).astype('float32')
             self.index.reset()
             self.index.add(self.embeddings)
             self.image_files = image_files
 
-            print(f"语义向量创建完成，索引了 {len(image_files)} 张图片")
+            print(f"语义向量创建完成，索引了 {len(image_files)} 张图片，向量维度: {self.embeddings.shape}")
             return True
 
         except Exception as e:
             print(f"创建图片语义向量失败: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
-    def search_by_text(self, query_text: str, top_k: int = 10) -> List[Tuple]:
+    def search_by_text(self, query_text: str, top_k: int = 10, min_similarity: float = 0.25) -> List[Tuple]:
         """
         通过文本搜索相似图片
 
         Args:
             query_text: 查询文本
             top_k: 返回结果数量
+            min_similarity: 最小相似度阈值，低于此值的结果将被过滤
 
         Returns:
             [(FileItem, distance), ...] 列表
@@ -90,26 +108,31 @@ class SemanticSearchService:
             return []
 
         try:
+            print(f"开始语义搜索: {query_text}")
             from sentence_transformers import SentenceTransformer
             import torch
 
-            model = SentenceTransformer('clip-ViT-B-32')
+            model = SentenceTransformer(config.SEMANTIC_MODEL_PATH, local_files_only=True)
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
             model.to(device)
 
-            query_embedding = model.encode([query_text], convert_to_numpy=True).astype('float32')
-
+            query_embedding = model.encode(query_text).astype('float32')
+            query_embedding = self._normalize_embeddings(query_embedding)
             distances, indices = self.index.search(query_embedding, min(top_k, self.index.ntotal))
 
             results = []
             for dist, idx in zip(distances[0], indices[0]):
-                if idx < len(self.image_files):
+                if idx >= 0 and idx < len(self.image_files) and dist >= min_similarity:
                     results.append((self.image_files[idx], float(dist)))
+
+            print(f"语义搜索完成，返回 {len(results)} 个结果（阈值: {min_similarity}）")
 
             return results
 
         except Exception as e:
             print(f"语义搜索失败: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
     def save_index(self, save_path: str):

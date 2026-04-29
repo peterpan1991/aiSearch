@@ -17,6 +17,7 @@ class FileItem:
     size: int = 0
     ocr_text: Optional[str] = None
     embedding: Optional[List[float]] = None
+    similarity: Optional[float] = None
 
     def __post_init__(self):
         """初始化派生字段"""
