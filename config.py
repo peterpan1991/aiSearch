@@ -27,11 +27,17 @@ OCR_MODEL_DIR = os.path.join(CACHE_DIR, 'ocr_models')
 # 索引数据库目录
 INDEX_DIR = os.path.join(CACHE_DIR, 'index')
 
+# 语义索引缓存文件路径
+SEMANTIC_INDEX_CACHE = os.path.join(INDEX_DIR, 'semantic_index.pkl')
+
+# OCR索引缓存文件路径
+OCR_INDEX_CACHE = os.path.join(INDEX_DIR, 'ocr_index.pkl')
+
 # 语义搜索模型配置
-SEMANTIC_MODEL_NAME = 'clip-ViT-B-32'
+SEMANTIC_MODEL_NAME = 'Chinese-CLIP'
 SEMANTIC_BATCH_SIZE = 32
 SEMANTIC_TOP_K = 50
-SEMANTIC_MODEL_PATH = './models/sentence-transformers/clip-ViT-B-32'
+SEMANTIC_MODEL_PATH = './models/chinese-clip'
 
 # 日志配置
 LOG_LEVEL = 'INFO'

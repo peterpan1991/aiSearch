@@ -128,3 +128,43 @@ class OCRService:
     def clear_cache(self):
         """清空缓存"""
         self.image_cache.clear()
+
+    def save_index(self, save_path: str):
+        """保存OCR索引到文件"""
+        if not self.image_cache:
+            return
+
+        try:
+            import os
+            import pickle
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+            index_data = {
+                'image_cache': self.image_cache,
+            }
+
+            with open(save_path, 'wb') as f:
+                pickle.dump(index_data, f)
+
+            print(f"OCR索引已保存到: {save_path}")
+        except Exception as e:
+            print(f"保存OCR索引失败: {e}")
+
+    def load_index(self, load_path: str) -> bool:
+        """从文件加载OCR索引"""
+        import os
+        if not os.path.exists(load_path):
+            return False
+
+        try:
+            import pickle
+            with open(load_path, 'rb') as f:
+                index_data = pickle.load(f)
+
+            self.image_cache = index_data.get('image_cache', [])
+            print(f"OCR索引已加载，共 {len(self.image_cache)} 张图片")
+            return True
+
+        except Exception as e:
+            print(f"加载OCR索引失败: {e}")
+            return False

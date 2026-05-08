@@ -145,7 +145,7 @@ class SemanticSearchService:
 
             index_data = {
                 'index': faiss.serialize_index(self.index),
-                'files': [f.path for f in self.image_files],
+                'files': self.image_files,
                 'embeddings': self.embeddings,
             }
 

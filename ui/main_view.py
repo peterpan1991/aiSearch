@@ -17,15 +17,16 @@ class MainView(ft.Container):
         self.expand = True
         self.file_service = FileService()
         self.search_service = SearchService()
+        self.indexed_image_files = []
 
         # 初始化UI组件
         self.folder_selector = FolderSelector(on_folder_selected=self.on_folder_selected)
         self.search_mode = SearchModeSelector(on_mode_change=self.on_search_mode_change)
-        self.search_bar = SearchBar(on_search=self.on_search)
+        self.search_bar = SearchBar(on_search=self.on_search, on_build_index=self.on_build_index)
         self.result_grid = ResultGrid(on_item_click=self.on_item_click)
         self.status_bar = StatusBar()
 
-        # # 构建界面
+        # 构建界面
         self.content = ft.Column([
             self.create_card(ft.Column([
                 self.folder_selector,
@@ -48,11 +49,11 @@ class MainView(ft.Container):
 
     def on_folder_selected(self, folder_path: str):
         """文件夹选择后的处理"""
+        self.folder_path = folder_path
         self.search_bar.set_enabled(False)
         self.status_bar.set_status(f"正在扫描文件夹: {folder_path}")
         self.update()
 
-        # 扫描文件
         files = self.file_service.scan_folder(folder_path)
         image_files = [f for f in files if f.is_image()]
 
@@ -62,27 +63,21 @@ class MainView(ft.Container):
             self.update()
             return
 
-        # 根据模式显示不同的状态信息
-        mode_name = "文字" if self.search_mode.get_mode() == "ocr" else "语义"
-        self.status_bar.set_status(f"找到 {len(image_files)} 张图片，开始{mode_name}处理...")
-        self.search_bar.set_enabled(False)
+        self.indexed_image_files = image_files
+        self.search_service.reset_index_status()
+
+        loaded = self.search_service.load_cached_index(folder_path)
+        
+        if loaded:
+            self.status_bar.set_status(f"已加载缓存索引，找到 {len(image_files)} 张图片，可以直接搜索")
+            self.search_bar.set_index_button_enabled(False)
+        else:
+            self.search_bar.set_index_button_enabled(True)
+            self.status_bar.set_status(f"找到 {len(image_files)} 张图片，请点击\"建立索引\"按钮开始处理")
+        
+        self.result_grid.set_results(image_files)
+        self.search_bar.set_enabled(True)
         self.update()
-
-        # 在后台线程执行处理，避免阻塞UI
-        def process_worker():
-            self.search_service.process_images(image_files, self.on_process_progress)
-
-            # 处理完成后在主线程更新UI
-            def on_complete():
-                self.status_bar.set_status(f"{mode_name}处理完成，共 {len(image_files)} 张图片")
-                self.result_grid.set_results(image_files)
-                self.search_bar.set_enabled(True)
-                self.update()
-
-            self.page.run_thread(on_complete)
-
-        thread = threading.Thread(target=process_worker, daemon=True)
-        thread.start()
 
     def on_process_progress(self, current: int, total: int, filename: str):
         """处理进度回调"""
@@ -96,29 +91,72 @@ class MainView(ft.Container):
         """搜索模式切换"""
         self.current_search_mode = mode
         mode_name = "文字" if mode == "ocr" else "语义"
-        self.status_bar.set_status(f"切换到{mode_name}搜索模式")
-
-        # 设置搜索服务的模式
+        
         from services.search_service import SearchMode as SM
         search_mode = SM.OCR if mode == "ocr" else SM.SEMANTIC
         self.search_service.set_mode(search_mode)
 
+        if self.indexed_image_files:
+            self.search_service.reset_index_status()
+            loaded = self.search_service.load_cached_index(self.folder_path if hasattr(self, 'folder_path') else "")
+            
+            if loaded:
+                self.status_bar.set_status(f"已加载{mode_name}缓存索引，可以直接搜索")
+                self.search_bar.set_index_button_enabled(False)
+            else:
+                self.status_bar.set_status(f"切换到{mode_name}搜索模式，请重新建立索引")
+                self.search_bar.set_index_button_enabled(True)
+        
         self.update()
 
     def on_search(self, keyword: str):
         """搜索处理"""
+        if not self.search_service.is_index_built():
+            self.show_message("提示", "请先建立索引后再进行搜索")
+            return
+
         mode = self.search_mode.get_mode()
         mode_name = "文字" if mode == "ocr" else "语义"
         self.status_bar.set_status(f"{mode_name}搜索: {keyword}")
         self.update()
 
-        # 根据模式选择搜索方法
         search_mode = SearchMode.OCR if mode == "ocr" else SearchMode.SEMANTIC
         results = self.search_service.search(keyword, mode=search_mode)
 
         self.status_bar.set_status(f"找到 {len(results)} 个结果")
         self.result_grid.set_results(results)
         self.update()
+
+    def on_build_index(self):
+        """建立索引处理"""
+        if not self.indexed_image_files:
+            self.show_message("提示", "没有可建立索引的图片")
+            return
+        self.status_bar.show_progress(True)
+
+        mode = self.search_mode.get_mode()
+        mode_name = "文字" if mode == "ocr" else "语义"
+        self.status_bar.set_status(f"开始{mode_name}索引处理...")
+        self.search_bar.set_enabled(False)
+        self.search_bar.set_index_button_enabled(False)
+        self.update()
+
+        # 在后台线程执行处理，避免阻塞UI
+        def process_worker():
+            self.search_service.process_images(self.indexed_image_files, self.on_process_progress)
+
+            # 处理完成后在主线程更新UI
+            def on_complete():
+                self.status_bar.set_status(f"{mode_name}索引处理完成，共 {len(self.indexed_image_files)} 张图片")
+                self.search_bar.set_enabled(True)
+                self.search_bar.set_index_button_enabled(False)
+                self.status_bar.show_progress(False)
+                self.update()
+
+            self.page.run_thread(on_complete)
+
+        thread = threading.Thread(target=process_worker, daemon=True)
+        thread.start()
 
     def on_item_click(self, file_item):
         """图片点击事件 - 显示预览"""

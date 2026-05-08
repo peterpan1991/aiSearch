@@ -12,7 +12,7 @@ class SearchModeSelector(ft.Container):
     def __init__(self, on_mode_change: Callable = None):
         super().__init__()
         self.on_mode_change_callback = on_mode_change
-        self.current_mode = "ocr"
+        self.current_mode = "semantic"
 
         self.ocr_button = ft.Button(
             content=ft.Row([
@@ -21,7 +21,7 @@ class SearchModeSelector(ft.Container):
             ], spacing=5),
             on_click=lambda e: self._select_mode("ocr"),
             style=ft.ButtonStyle(
-                bgcolor=COLORS['accent'],
+                bgcolor=COLORS['text_light'],
                 color="#FFFFFF",
                 shape=ft.RoundedRectangleBorder(radius=8),
             ),
@@ -34,7 +34,7 @@ class SearchModeSelector(ft.Container):
             ], spacing=5),
             on_click=lambda e: self._select_mode("semantic"),
             style=ft.ButtonStyle(
-                bgcolor=COLORS['text_light'],
+                bgcolor=COLORS['accent'],
                 color="#FFFFFF",
                 shape=ft.RoundedRectangleBorder(radius=8),
             ),
@@ -42,8 +42,8 @@ class SearchModeSelector(ft.Container):
 
         self.content = ft.Row([
             ft.Text("搜索模式:", size=13, weight=ft.FontWeight.W_400),
-            self.ocr_button,
             self.semantic_button,
+            self.ocr_button,            
         ], spacing=10)
 
     def _select_mode(self, mode: str):
@@ -74,9 +74,10 @@ class SearchModeSelector(ft.Container):
 class SearchBar(ft.Container):
     """搜索栏组件"""
 
-    def __init__(self, on_search: Callable[[str], None]):
+    def __init__(self, on_search: Callable[[str], None], on_build_index: Callable = None):
         super().__init__()
         self.on_search_callback = on_search
+        self.on_build_index_callback = on_build_index
 
         self.search_field = ft.TextField(
             hint_text="输入关键字搜索图片...",
@@ -98,9 +99,22 @@ class SearchBar(ft.Container):
             ),
         )
 
+        self.index_button = ft.Button(
+            icon=ft.Icons.BUILD,
+            content="建立索引",
+            on_click=self._handle_build_index,
+            style=ft.ButtonStyle(
+                bgcolor=COLORS['accent'],
+                color="#FFFFFF",
+                padding=15,
+                shape=ft.RoundedRectangleBorder(radius=8),
+            ),
+        )
+
         self.content = ft.Row(
             controls=[
                 self.search_field,
+                self.index_button,
                 self.search_button,
             ],
             spacing=10,
@@ -111,11 +125,20 @@ class SearchBar(ft.Container):
         self.search_button.disabled = not enabled
         self.search_button.update()
 
+    def set_index_button_enabled(self, enabled: bool):
+        """设置建立索引按钮启用/禁用状态"""
+        self.index_button.disabled = not enabled
+        self.index_button.update()
+
     def _handle_search(self):
         """处理搜索"""
         keyword = self.search_field.value
-        if keyword:
-            self.on_search_callback(keyword)
+        self.on_search_callback(keyword)
+
+    def _handle_build_index(self):
+        """处理建立索引"""
+        if self.on_build_index_callback:
+            self.on_build_index_callback()
 
 
 class FolderSelector(ft.Container):
@@ -198,7 +221,7 @@ class ResultGrid(ft.Container):
             self.content = self.empty_placeholder
         else:
             self.grid_view.controls = [self._create_result_item(r) for r in results]
-            self.content = self.grid_view
+            self.content = ft.Container(content=self.grid_view, expand=True)
         self.update()
 
     def _create_result_item(self, file_item):
@@ -247,11 +270,20 @@ class StatusBar(ft.Container):
     def __init__(self):
         super().__init__()
         self.status_text = ft.Text("就绪", size=12, color=ft.Colors.GREY)
-        self.content = ft.Row([
-            self.status_text,
-        ])
+        self.progress_bar = ft.ProgressBar(visible=False, color=COLORS['success'])
+        self.content = ft.Column(
+            controls=[
+                self.status_text,
+                self.progress_bar
+            ],
+        )
 
     def set_status(self, message: str):
         """设置状态消息"""
         self.status_text.value = message
         self.status_text.update()
+
+    def show_progress(self, visible: bool = True):
+        """显示或隐藏加载条"""
+        self.progress_bar.visible = visible
+        self.progress_bar.update()
